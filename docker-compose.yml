@@ -1,0 +1,67 @@
+version: "3.8"
+
+networks:
+  monitor-net:
+    driver: bridge
+
+volumes:
+  grafana_data: {}
+  influxdb_data: {}
+  telegraf_data: {}
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    volumes:
+      - influxdb_data:/var/lib/influxdib
+      - ./influxdb/init:/docker-entrypoint-initdb.d # place create-database.iql for database init
+    ports:
+      - "8086:8086"
+    restart: unless-stopped
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    hostname: telegraf
+    restart: unless-stopped
+    user: telegraf:998    
+    depends_on:
+      - influxdb
+    volumes:
+      - telegraf_data:/etc/telegraf
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro # 구성 파일 로드
+      - /:/hostfs:ro # 호스트 파일 시스템에 대한 읽기 전용 액세스
+      - /etc:/hostfs/etc:ro
+      - /proc:/hostfs/proc:ro
+      - /sys:/hostfs/sys:ro
+      - /var/run/utmp:/var/run/utmp:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Docker 소켓 액세스
+    environment:
+      - HOST_ETC=/hostfs/etc
+      - HOST_PROC=/hostfs/proc
+      - HOST_SYS=/hostfs/sys
+      - HOST_MOUNT_PREFIX=/hostfs
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
